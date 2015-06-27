@@ -12,6 +12,10 @@ var DeciduousCoverArt = (function() {
    * config */
   var cDIMS = [600, 600]; //size in pixels
   var mDIMS = [4, 4]; //size in mathematical units
+  var mBOUND_BOX = [
+    [-1, 1],
+    [1, -1]
+  ]; //top left and bottom right corner in mathematical coords
   var A = 0.75, C = -0.5; //parameters of the contour function
   var points = [
     [0.5, 0.6]
@@ -45,6 +49,15 @@ var DeciduousCoverArt = (function() {
 
     //draw the axes
     drawAxes('#CCC', 1);
+
+    //outlines the viewport with a box
+    var topLeft = mToC(mBOUND_BOX[0]);
+    var botRight = mToC(mBOUND_BOX[1]);
+    ctx.strokeStyle = 'black';
+    ctx.strokeRect(
+      topLeft[0], topLeft[1],
+      botRight[0]-topLeft[0], botRight[1] - topLeft[1]
+    );
 
     //draw the generator points
     for (var ai = 0; ai < points.length; ai++) {
