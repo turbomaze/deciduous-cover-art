@@ -24,9 +24,7 @@ var DeciduousCoverArt = (function() {
   ]; //top left and bottom right corner in mathematical coords
   var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
-    [0.5, -0.65],
-    [-0.5, -0.65],
-    [0, 0]
+    [0.5, -0.65]
   ]; //these points spawn leaves
 
   /*************
@@ -52,14 +50,21 @@ var DeciduousCoverArt = (function() {
 
     contFunc = getContourFunction([A, C]);
 
-    //clean slate
-    clearCanvas();
+    //event listeners
+    canvas.addEventListener('click', function(e) {
+        var pos = getCanvMousePos(e);
+        points.push(cToM(pos));
+        drawCoverArt();
+    });
 
     //do the work
     drawCoverArt();
   }
 
   function drawCoverArt() {
+      //clean slate
+      clearCanvas();
+
       //draw the distance-based colors
       var s = +new Date();
       paintDistances();
@@ -365,6 +370,11 @@ var DeciduousCoverArt = (function() {
    */
   function getProjOn(a, b) {
     return (a[0]*b[0] + a[1]*b[1])/getMag(b);
+  }
+
+  function getCanvMousePos(e) {
+    var rect = canvas.getBoundingClientRect();
+    return [e.clientX-rect.left, e.clientY-rect.top];
   }
 
   function $s(id) { //for convenience
