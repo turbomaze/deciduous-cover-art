@@ -11,20 +11,25 @@ var DeciduousCoverArt = (function() {
   /**********
    * config */
   var DRAW_HELPERS = {
-      coordSystems: true,
+      coordSystems: false,
       axes: true,
       contourFunction: true,
-      boundingBox: true
+      boundingBox: true,
+      booleanColors: true,
+      colorThresh: 0.25
   };
+
   var cDIMS = [500, 500]; //size in pixels
   var mDIMS = [3, 3]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
     [1, -1]
   ]; //top left and bottom right corner in mathematical coords
+
   var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
-    [0.5, -0.65]
+    [0.5, -0.65],
+    [-0.5, -0.65]
   ]; //these points spawn leaves
 
   /*************
@@ -49,11 +54,22 @@ var DeciduousCoverArt = (function() {
     ctx = canvas.getContext('2d');
 
     contFunc = getContourFunction([A, C]);
+    $s('#color-thresh').value = DRAW_HELPERS.colorThresh;
 
     //event listeners
     canvas.addEventListener('click', function(e) {
         var pos = getCanvMousePos(e);
         points.push(cToM(pos));
+        drawCoverArt();
+    });
+
+    $s('#toggle-color-btn').addEventListener('click', function(e) {
+        DRAW_HELPERS.booleanColors = !DRAW_HELPERS.booleanColors;
+        drawCoverArt();
+    });
+
+    $s('#color-thresh-btn').addEventListener('click', function() {
+        DRAW_HELPERS.colorThresh = parseFloat($s('#color-thresh').value);
         drawCoverArt();
     });
 
@@ -89,7 +105,7 @@ var DeciduousCoverArt = (function() {
       //draw the generator points
       for (var ai = 0; ai < points.length; ai++) {
         var p = points[ai];
-        drawPoint(mToC(p), 4, '#5b7');
+        drawPoint(mToC(p), 1, 'red');
 
         if (DRAW_HELPERS.coordSystems) {
             //draw the closest normal
@@ -138,7 +154,7 @@ var DeciduousCoverArt = (function() {
                 );
         	}
         	distances.sort(function(a,b) { return a-b; });
-        	var nthClosest = distances[which-1]+0.2*distances[which+0];
+        	var nthClosest = distances[which-1]-0.05*distances[which+0];
         	thisRowsClosests.push(nthClosest);
         	if (nthClosest > farthest) farthest = nthClosest;
         }
@@ -148,15 +164,28 @@ var DeciduousCoverArt = (function() {
     var currImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     for (var y = 0; y < canvas.height; y++) {
     	for (var x = 0; x < canvas.width; x++) {
-    		var color = getCoolColor(
-                allTheNthClosests[y][x],
-                [0, farthest]
-            );
+    		var color = [0, 0, 0, 0];
+
+            //black and white
+            if (DRAW_HELPERS.booleanColors) {
+                var frac = allTheNthClosests[y][x]/farthest;
+                if (frac < DRAW_HELPERS.colorThresh) {
+                    color = [0, 0, 0, 255];
+                } else {
+                    color = [255, 255, 255, 0];
+                }
+            } else { //cool red to blue kinda thing
+                color = getCoolColor(
+                    allTheNthClosests[y][x],
+                    [0, farthest]
+                );
+            }
+
     		var idx = 4*(y*canvas.width + x);
     		currImageData.data[idx+0] = color[0];
     		currImageData.data[idx+1] = color[1];
     		currImageData.data[idx+2] = color[2];
-    		currImageData.data[idx+3] = 255;
+    		currImageData.data[idx+3] = color[3];
     	}
     }
     ctx.putImageData(currImageData, 0, 0);
@@ -176,8 +205,9 @@ var DeciduousCoverArt = (function() {
           ];
           var x = Math.abs(transformedCoords[0]);
           var y = Math.abs(transformedCoords[1]);
-          var dist = Math.sqrt(Math.pow(x, 4) + Math.pow(y, 2));
-          return Math.pow(dist, 0.5);
+          var dist = Math.sqrt(Math.pow(x, 0.9) + Math.pow(y, 0.4));
+          dist += 0.8*Math.sqrt(Math.pow(x, 4) + Math.pow(y, 2));
+          return Math.pow(dist, 1);
       };
   }
 
@@ -433,7 +463,8 @@ var DeciduousCoverArt = (function() {
   	var color = [
           tightNumMap(raw[0], [0, 1], [0, 255]),
           tightNumMap(raw[1], [0, 1], [0, 255]),
-          tightNumMap(raw[2], [0, 1], [0, 255])
+          tightNumMap(raw[2], [0, 1], [0, 255]),
+          255 //alpha
       ];
   	return color;
   }
