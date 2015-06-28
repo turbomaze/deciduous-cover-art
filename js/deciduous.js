@@ -17,14 +17,15 @@ var DeciduousCoverArt = (function() {
       boundingBox: true
   };
   var cDIMS = [500, 500]; //size in pixels
-  var mDIMS = [4, 4]; //size in mathematical units
+  var mDIMS = [3, 3]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
     [1, -1]
   ]; //top left and bottom right corner in mathematical coords
   var A = 0.75, C = -0.5; //parameters of the contour function
   var points = [
-    [0.5, -0.65]
+    [0.5, -0.65],
+    [-0.5, -0.65]
   ]; //these points spawn leaves
 
   /*************
@@ -71,7 +72,10 @@ var DeciduousCoverArt = (function() {
                 var dist = distFunc([x, y]);
                 var col = numMap(dist, [0, maxDist], [0, 255]);
                 col = Math.floor(col);
-                drawPoint(mToC([x, y]), 1, 'rgba('+col+','+col+','+col+', 1)');
+                var colString = 'rgba('+col+','+col+','+col+', 1)';
+                if (col < 37) {
+                    drawPoint(mToC([x, y]), 1, 'black');
+                }
             }
         }
     }
@@ -130,14 +134,16 @@ var DeciduousCoverArt = (function() {
    */
   function getDistFunc(g) {
       var coordSystem = contFunc.getLeafVectors(g);
-      console.log(coordSystem);
       return function(p) {
           var shiftedP = [p[0] - g[0], p[1] - g[1]];
           var transformedCoords = [
               getProjOn(shiftedP, coordSystem.x),
               getProjOn(shiftedP, coordSystem.y)
           ];
-          return Math.pow(getDist([0, 0], transformedCoords), 0.75);
+          var x = Math.abs(transformedCoords[0]);
+          var y = Math.abs(transformedCoords[1]);
+          var dist = Math.sqrt(Math.pow(x, 4) + Math.pow(y, 2));
+          return Math.pow(dist, 0.5);
       };
   }
 
