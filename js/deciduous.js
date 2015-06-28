@@ -10,7 +10,13 @@
 var DeciduousCoverArt = (function() {
   /**********
    * config */
-  var cDIMS = [600, 600]; //size in pixels
+  var DRAW_HELPERS = {
+      coordSystems: true,
+      axes: true,
+      contourFunction: true,
+      boundingBox: true
+  };
+  var cDIMS = [500, 500]; //size in pixels
   var mDIMS = [4, 4]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
@@ -18,8 +24,7 @@ var DeciduousCoverArt = (function() {
   ]; //top left and bottom right corner in mathematical coords
   var A = 0.75, C = -0.5; //parameters of the contour function
   var points = [
-    [0.2, 0.8],
-    [-0.75, 0.8]
+    [0.5, -0.65]
   ]; //these points spawn leaves
 
   /*************
@@ -48,37 +53,92 @@ var DeciduousCoverArt = (function() {
     //clean slate
     clearCanvas();
 
+    //draw the distance estimations
+    var leftX = mORIGIN[0]-mDIMS[0]/2;
+    var rightX = leftX + mDIMS[0];
+    var leftY = mORIGIN[1]-mDIMS[1]/2;
+    var rightY = leftY + mDIMS[1];
+    var detail = 250;
+    for (var ai = 0; ai < points.length; ai++) {
+        var p = points[ai];
+        var distFunc = getDistFunc(p);
+        var maxDist = Math.max(
+            Math.max(distFunc([leftX, leftY]), distFunc([leftX, rightY])),
+            Math.max(distFunc([rightX, leftY]), distFunc([rightX, rightY]))
+        );
+        for (var x = leftX; x < rightX; x+=mDIMS[0]/detail) {
+            for (var y = leftY; y < rightY; y+=mDIMS[1]/detail) {
+                var dist = distFunc([x, y]);
+                var col = numMap(dist, [0, maxDist], [0, 255]);
+                col = Math.floor(col);
+                drawPoint(mToC([x, y]), 1, 'rgba('+col+','+col+','+col+', 1)');
+            }
+        }
+    }
+
     //draw the axes
-    drawAxes('#CCC', 1);
+    if (DRAW_HELPERS.axes) {
+        drawAxes('#CCC', 1);
+    }
 
     //outlines the viewport with a box
-    var topLeft = mToC(mBOUND_BOX[0]);
-    var botRight = mToC(mBOUND_BOX[1]);
-    ctx.strokeStyle = 'black';
-    ctx.strokeRect(
-      topLeft[0], topLeft[1],
-      botRight[0]-topLeft[0], botRight[1] - topLeft[1]
-    );
+    if (DRAW_HELPERS.boundingBox) {
+        var topLeft = mToC(mBOUND_BOX[0]);
+        var botRight = mToC(mBOUND_BOX[1]);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(
+          topLeft[0], topLeft[1],
+          botRight[0]-topLeft[0], botRight[1] - topLeft[1]
+        );
+    }
 
     //draw the generator points
     for (var ai = 0; ai < points.length; ai++) {
       var p = points[ai];
       drawPoint(mToC(p), 4, '#5b7');
 
-      //draw the closest normal
-      plot(
-          contFunc.normalThruP(p),
-          mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
-          1000, 'orange'
-      );
+      if (DRAW_HELPERS.coordSystems) {
+          //draw the closest normal
+          plot(
+              contFunc.normalThruP(p),
+              mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
+              1000, 'orange'
+          );
+
+          //draw the tan line
+          plot(
+              contFunc.tanThruP(p),
+              mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
+              1000, 'orange'
+          );
+      }
     }
 
     //draw F(X)
-    plot(
-        contFunc.F,
-        mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
-        250, 'red'
-    );
+    if (DRAW_HELPERS.contourFunction) {
+        plot(
+            contFunc.F,
+            mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
+            250, 'red'
+        );
+    }
+  }
+
+  /* getDistFunc(g)
+   * Given a generator point, this function returns the distance function that
+   * defines how far away points are from this generator.
+   */
+  function getDistFunc(g) {
+      var coordSystem = contFunc.getLeafVectors(g);
+      console.log(coordSystem);
+      return function(p) {
+          var shiftedP = [p[0] - g[0], p[1] - g[1]];
+          var transformedCoords = [
+              getProjOn(shiftedP, coordSystem.x),
+              getProjOn(shiftedP, coordSystem.y)
+          ];
+          return Math.pow(getDist([0, 0], transformedCoords), 0.75);
+      };
   }
 
   /***********
@@ -125,6 +185,9 @@ var DeciduousCoverArt = (function() {
         return funcs;
       },
 
+      /* normalThruP(p)
+       * Returns the normal through p with the closest intersection with F.
+       */
       normalThruP: function(p) {
         var normals = this.normalsThruP(p);
 
@@ -148,6 +211,34 @@ var DeciduousCoverArt = (function() {
             return normals[ai];
           }
         }
+      },
+
+      /* tanThruP(p)
+       * Returns the perpendicular line to normalThruP(p) that goes through p.
+       */
+      tanThruP: function(p) {
+          var theNormThruP = this.normalThruP(p);
+          var x0 = theNormThruP('get-intersection-x');
+          var m = 2*params[0]*x0;
+          return function(x) {
+              return m*(x - p[0]) + p[1];
+          };
+      },
+
+      /* getLeafVectors(p)
+       * Returns the coordinate system that defines the distance function of
+       * each generator point.
+       */
+      getLeafVectors: function(p) {
+          var tang = this.tanThruP(p);
+          var norm = this.normalThruP(p);
+          //warning: can't handle vertical lines
+          var xAxis = normalize([1, tang(1)-tang(0)]);
+          var yAxis = normalize([1, norm(1)-norm(0)]);
+          return {
+              x: xAxis,
+              y: yAxis
+          };
       },
 
       /* D(p, q)
@@ -213,8 +304,7 @@ var DeciduousCoverArt = (function() {
    * Returns the projection of vector a on b, where a and b are 2d vectors.
    */
   function getProjOn(a, b) {
-    var bMag = Math.sqrt(b[0]*b[0] + b[1]*b[1]);
-    return (a[0]*b[0] + a[1]*b[1])/bMag;
+    return (a[0]*b[0] + a[1]*b[1])/getMag(b);
   }
 
   function $s(id) { //for convenience
@@ -226,8 +316,20 @@ var DeciduousCoverArt = (function() {
     return Math.floor(low + Math.random()*(high-low));
   }
 
+  function normalize(a) {
+      var mag = getMag(a);
+      return [a[0]/mag, a[1]/mag];
+  }
+
   function getDist(a, b) {
-    return Math.sqrt(Math.pow(a[0]-b[0], 2) + Math.pow(a[1]-b[1], 2));
+    return getMag([
+        a[0] - b[0],
+        a[1] - b[1]
+    ]);
+  }
+
+  function getMag(a) {
+      return Math.sqrt(a[0]*a[0] + a[1]*a[1]);
   }
 
   function round(n, places) {
