@@ -22,10 +22,11 @@ var DeciduousCoverArt = (function() {
     [-1, 1],
     [1, -1]
   ]; //top left and bottom right corner in mathematical coords
-  var A = 0.75, C = -0.5; //parameters of the contour function
+  var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
     [0.5, -0.65],
-    [-0.5, -0.65]
+    [-0.5, -0.65],
+    [0, 0]
   ]; //these points spawn leaves
 
   /*************
@@ -54,72 +55,106 @@ var DeciduousCoverArt = (function() {
     //clean slate
     clearCanvas();
 
-    //draw the distance estimations
-    var leftX = mORIGIN[0]-mDIMS[0]/2;
-    var rightX = leftX + mDIMS[0];
-    var leftY = mORIGIN[1]-mDIMS[1]/2;
-    var rightY = leftY + mDIMS[1];
-    var detail = 250;
-    for (var ai = 0; ai < points.length; ai++) {
-        var p = points[ai];
-        var distFunc = getDistFunc(p);
-        var maxDist = Math.max(
-            Math.max(distFunc([leftX, leftY]), distFunc([leftX, rightY])),
-            Math.max(distFunc([rightX, leftY]), distFunc([rightX, rightY]))
-        );
-        for (var x = leftX; x < rightX; x+=mDIMS[0]/detail) {
-            for (var y = leftY; y < rightY; y+=mDIMS[1]/detail) {
-                var dist = distFunc([x, y]);
-                var col = numMap(dist, [0, maxDist], [0, 255]);
-                col = Math.floor(col);
-                var colString = 'rgba('+col+','+col+','+col+', 1)';
-                if (col < 37) {
-                    drawPoint(mToC([x, y]), 1, 'black');
-                }
-            }
-        }
-    }
+    //do the work
+    drawCoverArt();
+  }
 
-    //draw the axes
-    if (DRAW_HELPERS.axes) {
-        drawAxes('#CCC', 1);
-    }
+  function drawCoverArt() {
+      //draw the distance-based colors
+      var s = +new Date();
+      paintDistances();
+      console.log(((+new Date()) - s) + 'ms');
 
-    //outlines the viewport with a box
-    if (DRAW_HELPERS.boundingBox) {
-        var topLeft = mToC(mBOUND_BOX[0]);
-        var botRight = mToC(mBOUND_BOX[1]);
-        ctx.strokeStyle = 'black';
-        ctx.strokeRect(
-          topLeft[0], topLeft[1],
-          botRight[0]-topLeft[0], botRight[1] - topLeft[1]
-        );
-    }
-
-    //draw the generator points
-    for (var ai = 0; ai < points.length; ai++) {
-      var p = points[ai];
-      drawPoint(mToC(p), 4, '#5b7');
-
-      if (DRAW_HELPERS.coordSystems) {
-          //draw the closest normal
-          var closestNormal = contFunc.normalThruP(p);
-          drawLineFromFunc(closestNormal, 'orange', 1);
-
-          //draw the tan line
-          var tanFunc = contFunc.tanThruP(p);
-          drawLineFromFunc(tanFunc, 'orange', 1);
+      //draw the axes
+      if (DRAW_HELPERS.axes) {
+          drawAxes('#CCC', 1);
       }
+
+      //outlines the viewport with a box
+      if (DRAW_HELPERS.boundingBox) {
+          var topLeft = mToC(mBOUND_BOX[0]);
+          var botRight = mToC(mBOUND_BOX[1]);
+          ctx.strokeStyle = 'black';
+          ctx.strokeRect(
+            topLeft[0], topLeft[1],
+            botRight[0]-topLeft[0], botRight[1] - topLeft[1]
+          );
+      }
+
+      //draw the generator points
+      for (var ai = 0; ai < points.length; ai++) {
+        var p = points[ai];
+        drawPoint(mToC(p), 4, '#5b7');
+
+        if (DRAW_HELPERS.coordSystems) {
+            //draw the closest normal
+            var closestNormal = contFunc.normalThruP(p);
+            if (closestNormal(0) === Infinity) {
+                drawLine(
+                    mToC([0, -mDIMS[1]/2]),
+                    mToC([0, mDIMS[1]/2]),
+                    'orange', 1
+                );
+            }
+            drawLineFromFunc(closestNormal, 'orange', 1);
+
+            //draw the tan line
+            var tanFunc = contFunc.tanThruP(p);
+            drawLineFromFunc(tanFunc, 'orange', 1);
+        }
+      }
+
+      //draw F(X)
+      if (DRAW_HELPERS.contourFunction) {
+          plot(
+              contFunc.F,
+              mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
+              250, 'red'
+          );
+      }
+  }
+
+  function paintDistances() {
+    var which = 1;
+    var farthest = 0;
+    var allTheNthClosests = [];
+    var distFuncs = points.map(function(g) {
+        return getDistFunc(g);
+    });
+    for (var y = 0; y < canvas.height; y++) {
+        var thisRowsClosests = [];
+        for (var x = 0; x < canvas.width; x++) {
+        	var distances = [];
+        	for (var ai = 0; ai < points.length; ai++) {
+        		distances.push(
+                    distFuncs[ai](
+                        cToM([x, y])
+                    )
+                );
+        	}
+        	distances.sort(function(a,b) { return a-b; });
+        	var nthClosest = distances[which-1]+0.2*distances[which+0];
+        	thisRowsClosests.push(nthClosest);
+        	if (nthClosest > farthest) farthest = nthClosest;
+        }
+        allTheNthClosests.push(thisRowsClosests);
     }
 
-    //draw F(X)
-    if (DRAW_HELPERS.contourFunction) {
-        plot(
-            contFunc.F,
-            mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
-            250, 'red'
-        );
+    var currImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (var y = 0; y < canvas.height; y++) {
+    	for (var x = 0; x < canvas.width; x++) {
+    		var color = getCoolColor(
+                allTheNthClosests[y][x],
+                [0, farthest]
+            );
+    		var idx = 4*(y*canvas.width + x);
+    		currImageData.data[idx+0] = color[0];
+    		currImageData.data[idx+1] = color[1];
+    		currImageData.data[idx+2] = color[2];
+    		currImageData.data[idx+3] = 255;
+    	}
     }
+    ctx.putImageData(currImageData, 0, 0);
   }
 
   /* getDistFunc(g)
@@ -175,6 +210,8 @@ var DeciduousCoverArt = (function() {
             return function(x) {
               if (x === 'get-intersection-x') {
                 return x0; //special case for efficiency later
+              } else if (x0 === 0) {
+                  return Infinity;
               } else {
                 return (-1/(2*params[0]*x0))*(x-x0) + CF(x0);
               }
@@ -232,9 +269,10 @@ var DeciduousCoverArt = (function() {
       getLeafVectors: function(p) {
           var tang = this.tanThruP(p);
           var norm = this.normalThruP(p);
-          //warning: can't handle vertical lines
           var xAxis = normalize([1, tang(1)-tang(0)]);
-          var yAxis = normalize([1, norm(1)-norm(0)]);
+          var yAxis = norm(0) === Infinity ? [0, 1] : normalize(
+              [1, norm(1)-norm(0)]
+          );
           return {
               x: xAxis,
               y: yAxis
@@ -307,8 +345,18 @@ var DeciduousCoverArt = (function() {
    */
   function mToC(p) {
     return [
-      p[0]*(cDIMS[0]/mDIMS[0]) + cORIGIN[0],
-      -p[1]*(cDIMS[1]/mDIMS[1]) + cORIGIN[1],
+      (p[0] - mORIGIN[0])*(cDIMS[0]/mDIMS[0]) + cORIGIN[0],
+      -(p[1] - mORIGIN[1])*(cDIMS[1]/mDIMS[1]) + cORIGIN[1],
+    ];
+  }
+
+  /* cToM(p)
+   * This function converts canvas coordinates to mathematical coordinates.
+   */
+  function cToM(p) {
+    return [
+      (p[0] - cORIGIN[0])*(mDIMS[0]/cDIMS[0]) + mORIGIN[0],
+      -(p[1] - cORIGIN[1])*(mDIMS[1]/cDIMS[1]) + mORIGIN[1],
     ];
   }
 
@@ -347,6 +395,37 @@ var DeciduousCoverArt = (function() {
   function round(n, places) {
     var mult = Math.pow(10, places);
     return Math.round(mult*n)/mult;
+  }
+
+  /* FROM http://stackoverflow.com/questions/7706339/
+                 grayscale-to-red-green-blue-matlab-jet-color-scale */
+  function getCoolColor(n, range) {
+  	var raw = [1.0, 1.0, 1.0]; //white
+
+  	if (n < range[0]) n = range[0];
+  	if (n > range[1]) n = range[1];
+  	var dn = range[1] - range[0];
+
+  	if (n < (range[0] + 0.25 * dn)) {
+  		raw[0] = 0;
+  		raw[1] = 4 * (n - range[0]) / dn;
+  	} else if (n < (range[0] + 0.5 * dn)) {
+  		raw[0] = 0;
+  		raw[2] = 1 + 4 * (range[0] + 0.25 * dn - n) / dn;
+  	} else if (n < (range[0] + 0.75 * dn)) {
+  		raw[0] = 4 * (n - range[0] - 0.5 * dn) / dn;
+  		raw[2] = 0;
+  	} else {
+  		raw[1] = 1 + 4 * (range[0] + 0.75 * dn - n) / dn;
+  		raw[2] = 0;
+  	}
+
+  	var color = [
+          tightNumMap(raw[0], [0, 1], [0, 255]),
+          tightNumMap(raw[1], [0, 1], [0, 255]),
+          tightNumMap(raw[2], [0, 1], [0, 255])
+      ];
+  	return color;
   }
 
   /* FROM http://stackoverflow.com/questions/27176423/
@@ -403,6 +482,16 @@ var DeciduousCoverArt = (function() {
     for (var i = 0; i < roots.length; i++) roots[i] -= b/(3*a);
 
     return roots;
+  }
+
+  /* tightNumMap(n, d, r)
+   * Returns numMap(n, d, r), bounding the output to r.
+   */
+  function tightNumMap(n, d, r) { //enforces boundaries
+  	var raw = numMap(n, d, r);
+  	if (raw < r[0]) return r[0];
+  	else if (raw > r[1]) return r[1];
+  	else return raw;
   }
 
   /* numMap(n, d, r)
