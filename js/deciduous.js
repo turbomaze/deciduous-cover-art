@@ -103,18 +103,12 @@ var DeciduousCoverArt = (function() {
 
       if (DRAW_HELPERS.coordSystems) {
           //draw the closest normal
-          plot(
-              contFunc.normalThruP(p),
-              mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
-              1000, 'orange'
-          );
+          var closestNormal = contFunc.normalThruP(p);
+          drawLineFromFunc(closestNormal, 'orange', 1);
 
           //draw the tan line
-          plot(
-              contFunc.tanThruP(p),
-              mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
-              1000, 'orange'
-          );
+          var tanFunc = contFunc.tanThruP(p);
+          drawLineFromFunc(tanFunc, 'orange', 1);
       }
     }
 
@@ -294,6 +288,18 @@ var DeciduousCoverArt = (function() {
     ctx.lineTo(end[0], end[1]);
     ctx.lineWidth = thickness || 3;
     ctx.stroke();
+  }
+
+  function drawLineFromFunc(fn, color, thickness) {
+      //draw the tan line
+      var startX = mORIGIN[0]-mDIMS[0]/2;
+      var startY = fn(startX);
+      var endX = mORIGIN[0]+mDIMS[0]/2;
+      var endY = fn(endX);
+      drawLine(
+        mToC([startX, startY]), mToC([endX, endY]),
+        color || 'orange', thickness || 1
+      );
   }
 
   /* mToC(p)
