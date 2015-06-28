@@ -18,7 +18,8 @@ var DeciduousCoverArt = (function() {
   ]; //top left and bottom right corner in mathematical coords
   var A = 0.75, C = -0.5; //parameters of the contour function
   var points = [
-    [0.5, 0.6]
+    [0.2, 0.8],
+    [-0.75, 0.8]
   ]; //these points spawn leaves
 
   /*************
@@ -64,29 +65,20 @@ var DeciduousCoverArt = (function() {
       var p = points[ai];
       drawPoint(mToC(p), 4, '#5b7');
 
-      //draw the normals through p
-      var normsThruP = contFunc.normalsThruP(p);
-      for (var bi = 0; bi < normsThruP.length; bi++) {
-        var normThruP = normsThruP[bi];
-        console.log(normThruP('get-intersection-x'));
-        var n = 1000;
-        var leftmostX = mORIGIN[0]-mDIMS[0]/2;
-        for (var x = leftmostX; x < leftmostX+mDIMS[0]; x += mDIMS[0]/n) {
-          var y = normThruP(x);
-          var p = mToC([x, y]);
-          drawPoint(p, 1, 'orange');
-        }
-      }
+      //draw the closest normal
+      plot(
+          contFunc.normalThruP(p),
+          mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
+          1000, 'orange'
+      );
     }
 
     //draw F(X)
-    var n = 250;
-    var leftmostX = mORIGIN[0]-mDIMS[0]/2;
-    for (var x = leftmostX; x < leftmostX+mDIMS[0]; x += mDIMS[0]/n) {
-      var y = contFunc.F(x);
-      var p = mToC([x, y]);
-      drawPoint(p, 1, 'red');
-    }
+    plot(
+        contFunc.F,
+        mORIGIN[0]-mDIMS[0]/2, mORIGIN[0]+mDIMS[0]/2,
+        250, 'red'
+    );
   }
 
   /***********
@@ -112,22 +104,22 @@ var DeciduousCoverArt = (function() {
        * Returns all the lines through point p that are normal to F(x).
        */
       normalsThruP: function(p) {
-        var k = 2*params[0]*p[1] - params[1] + 1;
+        var k = (1/(2*params[0]))+(-p[1])+(params[1]);
         //potential x-coords of intersections between the normal and F(x)
-        var x0s = solveCubic(2*Math.pow(params[0], 2), 0, -k, -p[0]);
+        var x0s = solveCubic(params[0], 0, k, -p[0]/(2*params[0]));
 
         //create the normal functions from the x0s
         var funcs = [];
         for (var ai = 0; ai < x0s.length; ai++) {
-          funcs.push((function(x0) {
+          funcs.push((function(x0, CF) {
             return function(x) {
               if (x === 'get-intersection-x') {
                 return x0; //special case for efficiency later
               } else {
-                return (-1/(2*params[0]*x0))*(x-x0) + params[0]*x0*x0 + params[1];
+                return (-1/(2*params[0]*x0))*(x-x0) + CF(x0);
               }
             }
-          })(x0s[ai]));
+          })(x0s[ai], this.F));
         }
 
         return funcs;
@@ -169,6 +161,13 @@ var DeciduousCoverArt = (function() {
 
   /********************
    * helper functions */
+  function plot(fn, left, right, n, color) {
+      for (var x = left; x < right; x += (right - left)/n) {
+        var p = mToC([x, fn(x)]);
+        drawPoint(p, 1, color);
+      }
+  }
+
   function drawAxes(color, thickness) {
     drawLine(
       [0, cORIGIN[1]], [cDIMS[0], cORIGIN[1]], color, thickness
@@ -228,7 +227,7 @@ var DeciduousCoverArt = (function() {
   }
 
   function getDist(a, b) {
-    return Math.sqrt(Math.pow(a[0]-b[0]) + Math.pow(a[1]-b[1]));
+    return Math.sqrt(Math.pow(a[0]-b[0], 2) + Math.pow(a[1]-b[1], 2));
   }
 
   function round(n, places) {
@@ -238,14 +237,12 @@ var DeciduousCoverArt = (function() {
 
   /* FROM http://stackoverflow.com/questions/27176423/
                  function-to-solve-cubic-equation-analytically */
-  function cuberoot(x) {
-    var y = Math.pow(Math.abs(x), 1/3);
-    return x < 0 ? -y : y;
-  }
-
-  /* FROM http://stackoverflow.com/questions/27176423/
-                 function-to-solve-cubic-equation-analytically */
   function solveCubic(a, b, c, d) {
+    function cuberoot(x) {
+      var y = Math.pow(Math.abs(x), 1/3);
+      return x < 0 ? -y : y;
+    }
+
     if (Math.abs(a) < 1e-8) { // Quadratic case, ax^2+bx+c=0
       a = b; b = c; c = d;
       if (Math.abs(a) < 1e-8) { // Linear case, ax+b=0
