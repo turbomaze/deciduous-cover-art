@@ -2,9 +2,9 @@
 |     Deciduous    |
 |     Cover Art    |
 | @author Anthony  |
-| @version 0.1     |
+| @version 0.2     |
 | @date 2015/06/27 |
-| @edit 2015/06/27 |
+| @edit 2015/06/28 |
 \******************/
 
 var DeciduousCoverArt = (function() {
