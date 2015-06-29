@@ -16,11 +16,11 @@ var DeciduousCoverArt = (function() {
       contourFunction: true,
       boundingBox: true,
       booleanColors: true,
-      colorThresh: 0.25
+      colorThresh: 0.23
   };
 
   var cDIMS = [500, 500]; //size in pixels
-  var mDIMS = [3, 3]; //size in mathematical units
+  var mDIMS = [2.5, 2.5]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
     [1, -1]
@@ -59,7 +59,14 @@ var DeciduousCoverArt = (function() {
     //event listeners
     canvas.addEventListener('click', function(e) {
         var pos = getCanvMousePos(e);
-        points.push(cToM(pos));
+        var mPos = cToM(pos);
+        if (Math.abs(mPos[0]) < 0.02) {
+            mPos[0] = 0;
+            points.push(mPos);
+        } else {
+            points.push(mPos);
+            points.push([-mPos[0], mPos[1]]);
+        }
         drawCoverArt();
     });
 
@@ -172,7 +179,7 @@ var DeciduousCoverArt = (function() {
                 if (frac < DRAW_HELPERS.colorThresh) {
                     color = [0, 0, 0, 255];
                 } else {
-                    color = [255, 255, 255, 0];
+                    continue; //skip this pixel
                 }
             } else { //cool red to blue kinda thing
                 color = getCoolColor(
@@ -205,9 +212,22 @@ var DeciduousCoverArt = (function() {
           ];
           var x = Math.abs(transformedCoords[0]);
           var y = Math.abs(transformedCoords[1]);
-          var dist = Math.sqrt(Math.pow(x, 0.9) + Math.pow(y, 0.4));
-          dist += 0.8*Math.sqrt(Math.pow(x, 4) + Math.pow(y, 2));
-          return Math.pow(dist, 1);
+          var params = [
+              transformedCoords[1] < 0 ? 1 : 0.8, //spikeyContr
+              tightNumMap(y, [0, 0.4], [0.7, 2]), //roundyContr
+              transformedCoords[1] < 0 ? 0.9 : 0.9,
+              transformedCoords[1] < 0 ? 0.4 : 0.4,
+              transformedCoords[1] < 0 ? 2.2 : 2.8,
+              transformedCoords[1] < 0 ? 2.0 : 2.0
+          ];
+          var spikey = Math.sqrt(
+              Math.pow(x, params[2]) + Math.pow(y, params[3])
+          ); //pointy
+          var roundy = Math.sqrt(
+              Math.pow(x, params[4]) + Math.pow(y, params[5])
+          ); //rounded
+          var dist = params[0]*spikey + params[1]*roundy;
+          return Math.pow(dist, 0.85);
       };
   }
 
@@ -310,15 +330,8 @@ var DeciduousCoverArt = (function() {
           );
           return {
               x: xAxis,
-              y: yAxis
+              y: p[0] > 0 ? yAxis : [-yAxis[0], -yAxis[1]]
           };
-      },
-
-      /* D(p, q)
-       * Returns the leafy-distance from generator g to point p.
-       */
-      D: function(g, p) {
-        return false;
       }
     };
   }
@@ -546,7 +559,10 @@ var DeciduousCoverArt = (function() {
   }
 
   return {
-    init: initDeciduousCoverArt
+    init: initDeciduousCoverArt,
+    getPoints: function() {
+        return points;
+    }
   };
 })();
 
