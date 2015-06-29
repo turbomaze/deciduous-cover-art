@@ -14,13 +14,14 @@ var DeciduousCoverArt = (function() {
       coordSystems: false,
       axes: true,
       contourFunction: true,
-      boundingBox: true,
+      generatorPoints: false,
+      boundingBox: false,
       booleanColors: true,
-      colorThresh: 0.23
+      colorThresh: 0.19
   };
 
-  var cDIMS = [500, 500]; //size in pixels
-  var mDIMS = [2.5, 2.5]; //size in mathematical units
+  var cDIMS = [350, 350]; //size in pixels
+  var mDIMS = [2, 2]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
     [1, -1]
@@ -28,8 +29,12 @@ var DeciduousCoverArt = (function() {
 
   var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
-    [0.5, -0.65],
-    [-0.5, -0.65]
+    [0.5, -0.55], [-0.5, -0.55],
+    [-0.85, -0.12], [0.85, -0.12],
+    [0, -0.355],
+    [1.065, -0.56], [-1.065, -0.56],
+    [0, -0.87],
+    [0.66, -0.985], [-0.66, -0.985]
   ]; //these points spawn leaves
 
   /*************
@@ -112,7 +117,9 @@ var DeciduousCoverArt = (function() {
       //draw the generator points
       for (var ai = 0; ai < points.length; ai++) {
         var p = points[ai];
-        drawPoint(mToC(p), 1, 'red');
+        if (DRAW_HELPERS.generatorPoints) {
+            drawPoint(mToC(p), 1, 'red');
+        }
 
         if (DRAW_HELPERS.coordSystems) {
             //draw the closest normal
@@ -153,11 +160,10 @@ var DeciduousCoverArt = (function() {
         var thisRowsClosests = [];
         for (var x = 0; x < canvas.width; x++) {
         	var distances = [];
+            var mCoords = cToM([x, y]);
         	for (var ai = 0; ai < points.length; ai++) {
         		distances.push(
-                    distFuncs[ai](
-                        cToM([x, y])
-                    )
+                    distFuncs[ai](mCoords)
                 );
         	}
         	distances.sort(function(a,b) { return a-b; });
@@ -177,6 +183,10 @@ var DeciduousCoverArt = (function() {
             if (DRAW_HELPERS.booleanColors) {
                 var frac = allTheNthClosests[y][x]/farthest;
                 if (frac < DRAW_HELPERS.colorThresh) {
+                    color = getCoolColor(
+                        x,
+                        [0, cDIMS[0]]
+                    );
                     color = [0, 0, 0, 255];
                 } else {
                     continue; //skip this pixel
@@ -206,19 +216,14 @@ var DeciduousCoverArt = (function() {
       var coordSystem = contFunc.getLeafVectors(g);
       return function(p) {
           var shiftedP = [p[0] - g[0], p[1] - g[1]];
-          var transformedCoords = [
-              getProjOn(shiftedP, coordSystem.x),
-              getProjOn(shiftedP, coordSystem.y)
-          ];
+          var transformedCoords = getCoordsIn(shiftedP, coordSystem);
           var x = Math.abs(transformedCoords[0]);
           var y = Math.abs(transformedCoords[1]);
-          var params = [
-              transformedCoords[1] < 0 ? 1 : 0.8, //spikeyContr
-              tightNumMap(y, [0, 0.4], [0.7, 2]), //roundyContr
-              transformedCoords[1] < 0 ? 0.9 : 0.9,
-              transformedCoords[1] < 0 ? 0.4 : 0.4,
-              transformedCoords[1] < 0 ? 2.2 : 2.8,
-              transformedCoords[1] < 0 ? 2.0 : 2.0
+          var params = transformedCoords[1] > 0 ? [
+              //spikeyContr, roundyContr, ...
+              0.3, tightNumMap(y, [0, 0.4], [0.7, 2]), 0.9, 0.4, 2.8, 2.0
+          ] : [
+              0.3, tightNumMap(y, [0, 0.4], [0.7, 2]), 0.9, 0.4, 2.8, 2.0
           ];
           var spikey = Math.sqrt(
               Math.pow(x, params[2]) + Math.pow(y, params[3])
@@ -406,6 +411,16 @@ var DeciduousCoverArt = (function() {
       (p[0] - cORIGIN[0])*(mDIMS[0]/cDIMS[0]) + mORIGIN[0],
       -(p[1] - cORIGIN[1])*(mDIMS[1]/cDIMS[1]) + mORIGIN[1],
     ];
+  }
+
+  /* getCoordsIn(p, coordSystem)
+   * Returns the coordinates of p in the 2d system described by coordSystem.
+   */
+  function getCoordsIn(p, coordSystem) {
+      return [
+          getProjOn(p, coordSystem.x),
+          getProjOn(p, coordSystem.y)
+      ];
   }
 
   /* getProjOn(a, b)
