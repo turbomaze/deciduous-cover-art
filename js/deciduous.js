@@ -12,7 +12,7 @@ var DeciduousCoverArt = (function() {
    * config */
   var DRAW_HELPERS = {
       coordSystems: false,
-      axes: true,
+      axes: false,
       contourFunction: false,
       generatorPoints: false,
       boundingBox: false,
@@ -20,12 +20,22 @@ var DeciduousCoverArt = (function() {
       colorThresh: 0.19
   };
 
-  var cDIMS = [300, 300]; //size in pixels
+  var cDIMS = [500, 500]; //size in pixels
   var mDIMS = [2, 2]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
     [1, -1]
   ]; //top left and bottom right corner in mathematical coords
+
+  var BG = {
+      numRects: 4,
+      theta: -20*Math.PI/180,
+      maxOpacity: 0.07,
+      colorIntensities: [
+          [0, 1, 3, 1],
+          [1, 2, 3, 0]
+      ]
+  }; //the background
 
   var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
@@ -45,6 +55,17 @@ var DeciduousCoverArt = (function() {
     return a/2;
   }); //the canvas point that corresponds to the mathematical (0,0)
   var mORIGIN = [0, 0]; //mathematical origin
+
+  //some helper variables for the background
+  BG.rW = (
+      Math.abs(
+          Math.sin(BG.theta)*cDIMS[1]
+      )+Math.abs(Math.cos(BG.theta)*cDIMS[0])
+  )/BG.numRects;
+  BG.rL = Math.abs(
+      cDIMS[1]/Math.cos(BG.theta)
+  ) + Math.abs(BG.rW*Math.tan(BG.theta));
+  BG.offset = cDIMS[1]*Math.tan(BG.theta);
 
   /*********************
    * working variables */
@@ -96,6 +117,33 @@ var DeciduousCoverArt = (function() {
   function drawCoverArt() {
       //clean slate
       clearCanvas();
+
+      //draw the background
+      ctx.translate(BG.offset, 0);
+      ctx.rotate(BG.theta);
+      for (var ai = 0; ai < BG.numRects; ai++) {
+          var opcty = BG.maxOpacity*(BG.colorIntensities[0][ai]+1)/BG.numRects;
+          ctx.fillStyle = 'rgba(0,0,0,'+opcty+')';
+          ctx.fillRect(
+              ai*BG.rW,
+              -ai*BG.rW*Math.tan(BG.theta),
+              BG.rW, BG.rL
+          );
+      }
+      ctx.rotate(-BG.theta);
+      ctx.translate(-BG.offset, 0);
+
+      ctx.rotate(-BG.theta);
+      for (var ai = 0; ai < BG.numRects; ai++) {
+          var opcty = BG.maxOpacity*(BG.colorIntensities[1][ai]+1)/BG.numRects;
+          ctx.fillStyle = 'rgba(0,0,0,'+opcty+')';
+          ctx.fillRect(
+              ai*BG.rW,
+              (ai+1)*BG.rW*Math.tan(BG.theta),
+              BG.rW, BG.rL
+          );
+      }
+      ctx.rotate(BG.theta);
 
       //draw the distance-based colors
       var s = +new Date();
