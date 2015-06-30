@@ -12,8 +12,8 @@ var DeciduousCoverArt = (function() {
    * config */
   var DRAW_HELPERS = {
       coordSystems: false,
-      axes: true,
-      contourFunction: true,
+      axes: false,
+      contourFunction: false,
       generatorPoints: false,
       boundingBox: false,
       booleanColors: true,
@@ -29,12 +29,14 @@ var DeciduousCoverArt = (function() {
 
   var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
-    [0.5, -0.55], [-0.5, -0.55],
-    [-0.85, -0.12], [0.85, -0.12],
-    [0, -0.355],
-    [1.065, -0.56], [-1.065, -0.56],
-    [0, -0.87],
-    [0.66, -0.985], [-0.66, -0.985]
+    [1.21, 0.19], [-1.21, 0.19],
+    [0.49, -0.26], [-0.49, -0.26],
+    [1.0, -0.3], [-1.0, -0.3],
+    [0, -0.58],
+    [1.15, -0.69], [-1.15, -0.69],
+    [0.54, -0.74], [-0.54, -0.74],
+    [0, -1.03],
+    [0.65, -1.10], [-0.65, -1.10]
   ]; //these points spawn leaves
 
   /*************
@@ -182,19 +184,22 @@ var DeciduousCoverArt = (function() {
     var currImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     for (var y = 0; y < canvas.height; y++) {
     	for (var x = 0; x < canvas.width; x++) {
-    		var color = [0, 0, 0, 0];
+    		var b = [0, 0, 0, 0];
 
             //black and white
             if (DRAW_HELPERS.booleanColors) {
                 var frac = allTheNthClosests[y][x][1]/farthest;
                 if (frac < DRAW_HELPERS.colorThresh) {
+                    var globalCoords = cToM([x, y]);
                     var transformedCoords = getCoordsIn(
                         cToM([x, y]),
                         coordSystems[allTheNthClosests[y][x][0]]
                     );
-                    color = getCoolColor(
-                        (x > cORIGIN[0] ? 1 : -1) * transformedCoords[0],
-                        [-0.35, 0.35]
+                    color = getLeafColor(
+                        transformedCoords, globalCoords,
+                        coordSystems[allTheNthClosests[y][x][0]],
+                        allTheNthClosests[y][x][1],
+                        farthest
                     );
                 } else {
                     continue; //skip this pixel
@@ -214,6 +219,33 @@ var DeciduousCoverArt = (function() {
     	}
     }
     ctx.putImageData(currImageData, 0, 0);
+  }
+
+  /* getLeafColor(localCoords, globalCoords)
+   * Given
+   */
+  function getLeafColor(
+      localCoords, globalCoords, coordSystem, dist, farthest
+  ) {
+      var frac = dist/farthest;
+      var color1 = HSVtoRGB(
+          numMap(
+              (globalCoords[0]<mORIGIN[0]?1:-1)*localCoords[0],
+              [-0.4375, 0.4375], [0,0.8]
+          ), 0.7, 1
+      );
+      color1 = getGradient(
+          color1,
+          [255, 255, 255],
+          (frac>0.18?numMap(dist/farthest, [0.18, 0.19], [0.9, 0.1]):0.9)
+      );
+      if (localCoords[1] > 0) {
+          return getGradient(
+              color1,
+              [0, 0, 0],
+              (frac>0.17?numMap(dist/farthest, [0.17, 0.19], [1, 0.85]):1)
+          ).concat([255]);
+      } else return color1.concat([255]);
   }
 
   /* getDistFunc(g)
@@ -351,6 +383,67 @@ var DeciduousCoverArt = (function() {
 
   /********************
    * helper functions */
+  function getJuliaColorFromCoord(realConst, imConst, initX, initY) {
+    var colorMult = 2;
+    var maxIterations = 400;
+    var palette = [
+        [255,255,255], [254,254,254], [255, 255, 0], [0, 255, 0], [0, 0, 255],
+        [255, 0, 255], [255, 0, 0], [255,255,255], [254,254,254]
+    ];
+    var color = [0, 0, 0];
+
+    ///////////////////////////////////////////
+    //continue with the escape time algorithm//
+    var x_ = initX, y_ = initY;
+    var iteration = 0;
+    var xsq = initX*initX, ysq = initY*initY;
+    var val = xsq + ysq;
+
+    while (val <= 4 && iteration < maxIterations) {
+        y_ = x_*y_;
+        y_ += y_; //times 2
+        y_ += imConst;
+        x_ = (xsq - ysq) + realConst;
+
+        xsq = x_*x_;
+        ysq = y_*y_;
+        val = xsq + ysq;
+        iteration += 1;
+    }
+
+    if (iteration != maxIterations) { //if it didn't survive all the iterations, it has a color
+        var mu = iteration - (Math.log(Math.log(val))); //fractional stopping iteration
+        mu = palette.length * (mu/maxIterations); //spread the colors out
+        if (mu > palette.length) mu = palette.length; //not too big
+        else if (mu < 0) mu = 0; //not too small
+        mu *= colorMult; //allow the color scheme to repeat
+        var intPartMu = Math.floor(mu); //integer part of mu
+        var bucket = intPartMu%palette.length; //base the color on the integer part of mu
+        var nextBucket = (bucket+1)%palette.length; //the color right after that
+        var percentToNextBucket = mu - intPartMu; //the fractional part of mu
+
+        color = getGradient(
+            palette[bucket], palette[nextBucket],
+            1-percentToNextBucket
+        ); //invert it because small fractions means more of the first color
+    }
+
+    return [color[0], color[1], color[2], 255];
+  }
+
+  /* getGradient(c1, c2, percent)
+   * Returns an RGB color that's a percentage of the first and the second
+   */
+  function getGradient(c1, c2, percent) {
+  	var ret = [0, 0, 0];
+
+  	ret[0] = Math.floor((percent * c1[0]) + ((1 - percent) * c2[0]))%256;
+  	ret[1] = Math.floor((percent * c1[1]) + ((1 - percent) * c2[1]))%256;
+  	ret[2] = Math.floor((percent * c1[2]) + ((1 - percent) * c2[2]))%256;
+
+  	return ret;
+  }
+
   function plot(fn, left, right, n, color) {
       for (var x = left; x < right; x += (right - left)/n) {
         var p = mToC([x, fn(x)]);
@@ -506,6 +599,30 @@ var DeciduousCoverArt = (function() {
           255 //alpha
       ];
   	return color;
+  }
+
+  /* http://stackoverflow.com/questions/17242144/
+            javascript-convert-hsb-hsv-color-to-rgb-accurately */
+  function HSVtoRGB(h, s, v) {
+    var r, g, b, i, f, p, q, t;
+    i = Math.floor(h * 6);
+    f = h * 6 - i;
+    p = v * (1 - s);
+    q = v * (1 - f * s);
+    t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: r = v, g = t, b = p; break;
+        case 1: r = q, g = v, b = p; break;
+        case 2: r = p, g = v, b = t; break;
+        case 3: r = p, g = q, b = v; break;
+        case 4: r = t, g = p, b = v; break;
+        case 5: r = v, g = p, b = q; break;
+    }
+    return [
+        Math.floor(r * 255),
+        Math.floor(g * 255),
+        Math.floor(b * 255)
+    ];
   }
 
   /* FROM http://stackoverflow.com/questions/27176423/
