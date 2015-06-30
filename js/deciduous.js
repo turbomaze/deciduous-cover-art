@@ -12,7 +12,7 @@ var DeciduousCoverArt = (function() {
    * config */
   var DRAW_HELPERS = {
       coordSystems: false,
-      axes: false,
+      axes: true,
       contourFunction: false,
       generatorPoints: false,
       boundingBox: false,
@@ -20,7 +20,7 @@ var DeciduousCoverArt = (function() {
       colorThresh: 0.19
   };
 
-  var cDIMS = [350, 350]; //size in pixels
+  var cDIMS = [300, 300]; //size in pixels
   var mDIMS = [2, 2]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
@@ -86,6 +86,8 @@ var DeciduousCoverArt = (function() {
         DRAW_HELPERS.colorThresh = parseFloat($s('#color-thresh').value);
         drawCoverArt();
     });
+
+    $s('#save-btn').addEventListener('click', promptSaveCanvas);
 
     //do the work
     drawCoverArt();
@@ -221,8 +223,9 @@ var DeciduousCoverArt = (function() {
     ctx.putImageData(currImageData, 0, 0);
   }
 
-  /* getLeafColor(localCoords, globalCoords)
-   * Given
+  /* getLeafColor(localCoords, globalCoords, coordSystem, dist, farthest)
+   * Given all the defining information about a point in mathematical space,
+   * this function returns its color.
    */
   function getLeafColor(
       localCoords, globalCoords, coordSystem, dist, farthest
@@ -233,18 +236,26 @@ var DeciduousCoverArt = (function() {
               (globalCoords[0]<mORIGIN[0]?1:-1)*localCoords[0],
               [-0.4375, 0.4375], [0,0.8]
           ), 0.7, 1
-      );
+      ); //rainbow gradient
       color1 = getGradient(
           color1,
           [255, 255, 255],
-          (frac>0.18?numMap(dist/farthest, [0.18, 0.19], [0.9, 0.1]):0.9)
-      );
+          (frac > DRAW_HELPERS.colorThresh - 0.01 ? numMap(
+              dist/farthest, [
+                  DRAW_HELPERS.colorThresh - 0.01, DRAW_HELPERS.colorThresh
+              ], [0.9, 0.1]
+          ) : 0.9)
+      ); //white highlights
       if (localCoords[1] > 0) {
           return getGradient(
               color1,
               [0, 0, 0],
-              (frac>0.17?numMap(dist/farthest, [0.17, 0.19], [1, 0.85]):1)
-          ).concat([255]);
+              (frac > DRAW_HELPERS.colorThresh - 0.02 ? numMap(
+                  dist/farthest, [
+                      DRAW_HELPERS.colorThresh - 0.02, DRAW_HELPERS.colorThresh
+                  ], [1, 0.85]
+              ) : 1)
+          ).concat([255]); //black shadows
       } else return color1.concat([255]);
   }
 
@@ -383,6 +394,15 @@ var DeciduousCoverArt = (function() {
 
   /********************
    * helper functions */
+  function promptSaveCanvas() {
+      var downloadUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
+      if (downloadUrl.length < 1024*1024 || confirm(
+          'This is a relatively large image, so your browser may crash. Continue?'
+      )) {
+          window.location = downloadUrl;
+      }
+  }
+
   function getJuliaColorFromCoord(realConst, imConst, initX, initY) {
     var colorMult = 2;
     var maxIterations = 400;
