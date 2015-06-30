@@ -1,0 +1,19 @@
+@font-face {
+    font-family: Anders;
+    src: url('Anders.ttf');
+}
+
+@font-face {
+    font-family: ElegantLux;
+    src: url('ElegantLux-Mager.otf');
+}
+
+.preload1 {
+    font-family: Anders;
+    font-size: 3px;
+}
+
+.preload2 {
+    font-family: ElegantLux;
+    font-size: 3px;
+}

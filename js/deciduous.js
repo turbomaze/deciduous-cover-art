@@ -17,7 +17,7 @@ var DeciduousCoverArt = (function() {
       generatorPoints: false,
       boundingBox: false,
       booleanColors: true,
-      colorThresh: 0.19
+      colorThresh: 0.14
   };
 
   var cDIMS = [500, 500]; //size in pixels
@@ -28,12 +28,12 @@ var DeciduousCoverArt = (function() {
   ]; //top left and bottom right corner in mathematical coords
 
   var BG = {
-      numRects: 4,
-      theta: -20*Math.PI/180,
-      maxOpacity: 0.07,
+      numRects: 5,
+      theta: -25*Math.PI/180,
+      maxOpacity: 0.06,
       colorIntensities: [
-          [0, 1, 3, 1],
-          [1, 2, 3, 0]
+          [0, 1, 3, 1, 4],
+          [1, 2, 3, 4, 0]
       ]
   }; //the background
 
@@ -71,6 +71,7 @@ var DeciduousCoverArt = (function() {
    * working variables */
   var canvas, ctx;
   var contFunc;
+  var loadedFonts = false;
 
   /******************
    * work functions */
@@ -199,6 +200,27 @@ var DeciduousCoverArt = (function() {
               250, 'red'
           );
       }
+
+      //write text
+      setTimeout(function() {
+          loadedFonts = true;
+
+          //write text
+          ctx.font = '47px Anders';
+          ctx.fillStyle = 'black';
+          ctx.textBaseline = 'top';
+          ctx.fillText('D E C I D U O U S', 30, 147);
+      }, loadedFonts ? 6 : 2000);
+
+      setTimeout(function() {
+          loadedFonts = true;
+
+          //write text
+          ctx.font = '27px ElegantLux';
+          ctx.fillStyle = 'black';
+          ctx.textBaseline = 'top';
+          ctx.fillText('ANDIE CHILDS', 175, 110);
+      }, loadedFonts ? 6 : 2000);
   }
 
   function paintDistances() {
@@ -278,13 +300,26 @@ var DeciduousCoverArt = (function() {
   function getLeafColor(
       localCoords, globalCoords, coordSystem, dist, farthest
   ) {
+      //rainbow gradient
       var frac = dist/farthest;
+      //localCoords[0] = Math.floor(localCoords[0]/6);
       var color1 = HSVtoRGB(
           numMap(
               (globalCoords[0]<mORIGIN[0]?1:-1)*localCoords[0],
               [-0.4375, 0.4375], [0,0.8]
           ), 0.7, 1
-      ); //rainbow gradient
+      );
+
+      //grayscale
+      var luminosity = 0.21*color1[0] + 0.72*color1[1] + 0.07*color1[2];
+      var grayColor = [luminosity, luminosity, luminosity];
+      color1 = getGradient(
+          color1,
+          grayColor,
+          numMap(getMag(globalCoords), [0.4, 1.414], [1, 1])
+      );
+
+      //white highlights
       color1 = getGradient(
           color1,
           [255, 255, 255],
@@ -293,8 +328,10 @@ var DeciduousCoverArt = (function() {
                   DRAW_HELPERS.colorThresh - 0.01, DRAW_HELPERS.colorThresh
               ], [0.9, 0.1]
           ) : 0.9)
-      ); //white highlights
+      );
+
       if (localCoords[1] > 0) {
+          //black shadows
           return getGradient(
               color1,
               [0, 0, 0],
@@ -303,7 +340,7 @@ var DeciduousCoverArt = (function() {
                       DRAW_HELPERS.colorThresh - 0.02, DRAW_HELPERS.colorThresh
                   ], [1, 0.85]
               ) : 1)
-          ).concat([255]); //black shadows
+          ).concat([255]);
       } else return color1.concat([255]);
   }
 
