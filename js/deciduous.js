@@ -150,12 +150,14 @@ var DeciduousCoverArt = (function() {
   }
 
   function paintDistances() {
-    var which = 1;
-    var farthest = 0;
-    var allTheNthClosests = [];
+    var coordSystems = points.map(function(g) {
+        return contFunc.getLeafVectors(g);
+    });
     var distFuncs = points.map(function(g) {
         return getDistFunc(g);
     });
+    var farthest = 0;
+    var allTheNthClosests = [];
     for (var y = 0; y < canvas.height; y++) {
         var thisRowsClosests = [];
         for (var x = 0; x < canvas.width; x++) {
@@ -163,13 +165,16 @@ var DeciduousCoverArt = (function() {
             var mCoords = cToM([x, y]);
         	for (var ai = 0; ai < points.length; ai++) {
         		distances.push(
-                    distFuncs[ai](mCoords)
+                    [ai, distFuncs[ai](mCoords)]
                 );
         	}
-        	distances.sort(function(a,b) { return a-b; });
-        	var nthClosest = distances[which-1]-0.05*distances[which+0];
+        	distances.sort(function(a,b) { return a[1]-b[1]; });
+        	var nthClosest = [
+                distances[0][0],
+                distances[0][1] - 0.05*distances[1][1]
+            ];
         	thisRowsClosests.push(nthClosest);
-        	if (nthClosest > farthest) farthest = nthClosest;
+        	if (nthClosest[1] > farthest) farthest = nthClosest[1];
         }
         allTheNthClosests.push(thisRowsClosests);
     }
@@ -181,19 +186,22 @@ var DeciduousCoverArt = (function() {
 
             //black and white
             if (DRAW_HELPERS.booleanColors) {
-                var frac = allTheNthClosests[y][x]/farthest;
+                var frac = allTheNthClosests[y][x][1]/farthest;
                 if (frac < DRAW_HELPERS.colorThresh) {
-                    color = getCoolColor(
-                        x,
-                        [0, cDIMS[0]]
+                    var transformedCoords = getCoordsIn(
+                        cToM([x, y]),
+                        coordSystems[allTheNthClosests[y][x][0]]
                     );
-                    color = [0, 0, 0, 255];
+                    color = getCoolColor(
+                        (x > cORIGIN[0] ? 1 : -1) * transformedCoords[0],
+                        [-0.35, 0.35]
+                    );
                 } else {
                     continue; //skip this pixel
                 }
             } else { //cool red to blue kinda thing
                 color = getCoolColor(
-                    allTheNthClosests[y][x],
+                    allTheNthClosests[y][x][1],
                     [0, farthest]
                 );
             }
@@ -215,8 +223,7 @@ var DeciduousCoverArt = (function() {
   function getDistFunc(g) {
       var coordSystem = contFunc.getLeafVectors(g);
       return function(p) {
-          var shiftedP = [p[0] - g[0], p[1] - g[1]];
-          var transformedCoords = getCoordsIn(shiftedP, coordSystem);
+          var transformedCoords = getCoordsIn(p, coordSystem);
           var x = Math.abs(transformedCoords[0]);
           var y = Math.abs(transformedCoords[1]);
           var params = transformedCoords[1] > 0 ? [
@@ -335,7 +342,8 @@ var DeciduousCoverArt = (function() {
           );
           return {
               x: xAxis,
-              y: p[0] > 0 ? yAxis : [-yAxis[0], -yAxis[1]]
+              y: p[0] > 0 ? yAxis : [-yAxis[0], -yAxis[1]],
+              origin: p
           };
       }
     };
@@ -417,9 +425,12 @@ var DeciduousCoverArt = (function() {
    * Returns the coordinates of p in the 2d system described by coordSystem.
    */
   function getCoordsIn(p, coordSystem) {
+      var shiftedP = [
+          p[0] - coordSystem.origin[0], p[1] - coordSystem.origin[1]
+      ];
       return [
-          getProjOn(p, coordSystem.x),
-          getProjOn(p, coordSystem.y)
+          getProjOn(shiftedP, coordSystem.x),
+          getProjOn(shiftedP, coordSystem.y)
       ];
   }
 
@@ -575,6 +586,7 @@ var DeciduousCoverArt = (function() {
 
   return {
     init: initDeciduousCoverArt,
+    getCoordsIn: getCoordsIn,
     getPoints: function() {
         return points;
     }
