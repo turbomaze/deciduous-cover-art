@@ -27,14 +27,21 @@ var DeciduousCoverArt = (function() {
     [1, -1]
   ]; //top left and bottom right corner in mathematical coords
 
+  var n = 6;
   var BG = {
-      numRects: 5,
-      theta: -25*Math.PI/180,
-      maxOpacity: 0.06,
+      theta: -15*Math.PI/180,
+      maxOpacity: 0.2,
+      colorVals: [
+          [40,210,60],
+          [230,140,20]
+      ],
       colorIntensities: [
-          [0, 1, 3, 1, 4],
-          [1, 2, 3, 4, 0]
-      ]
+          getRandPerm(n, n),
+          getRandPerm(n, n)
+      ],
+      order: getRandPerm(2*n, 2*n).map(function(a) {
+          return a%2;
+      })
   }; //the background
 
   var A = 0.4, C = -0.3; //parameters of the contour function
@@ -48,6 +55,7 @@ var DeciduousCoverArt = (function() {
     [0, -1.03],
     [0.65, -1.10], [-0.65, -1.10]
   ]; //these points spawn leaves
+  points = [[-2,0],[2,0]];
 
   /*************
    * constants */
@@ -57,6 +65,7 @@ var DeciduousCoverArt = (function() {
   var mORIGIN = [0, 0]; //mathematical origin
 
   //some helper variables for the background
+  BG.numRects = BG.colorIntensities[0].length;
   BG.rW = (
       Math.abs(
           Math.sin(BG.theta)*cDIMS[1]
@@ -120,31 +129,7 @@ var DeciduousCoverArt = (function() {
       clearCanvas();
 
       //draw the background
-      ctx.translate(BG.offset, 0);
-      ctx.rotate(BG.theta);
-      for (var ai = 0; ai < BG.numRects; ai++) {
-          var opcty = BG.maxOpacity*(BG.colorIntensities[0][ai]+1)/BG.numRects;
-          ctx.fillStyle = 'rgba(0,0,0,'+opcty+')';
-          ctx.fillRect(
-              ai*BG.rW,
-              -ai*BG.rW*Math.tan(BG.theta),
-              BG.rW, BG.rL
-          );
-      }
-      ctx.rotate(-BG.theta);
-      ctx.translate(-BG.offset, 0);
-
-      ctx.rotate(-BG.theta);
-      for (var ai = 0; ai < BG.numRects; ai++) {
-          var opcty = BG.maxOpacity*(BG.colorIntensities[1][ai]+1)/BG.numRects;
-          ctx.fillStyle = 'rgba(0,0,0,'+opcty+')';
-          ctx.fillRect(
-              ai*BG.rW,
-              (ai+1)*BG.rW*Math.tan(BG.theta),
-              BG.rW, BG.rL
-          );
-      }
-      ctx.rotate(BG.theta);
+      drawRhombusBackground();
 
       //draw the distance-based colors
       var s = +new Date();
@@ -202,25 +187,7 @@ var DeciduousCoverArt = (function() {
       }
 
       //write text
-      setTimeout(function() {
-          loadedFonts = true;
-
-          //write text
-          ctx.font = '47px Anders';
-          ctx.fillStyle = 'black';
-          ctx.textBaseline = 'top';
-          ctx.fillText('D E C I D U O U S', 30, 147);
-      }, loadedFonts ? 6 : 2000);
-
-      setTimeout(function() {
-          loadedFonts = true;
-
-          //write text
-          ctx.font = '27px ElegantLux';
-          ctx.fillStyle = 'black';
-          ctx.textBaseline = 'top';
-          ctx.fillText('ANDIE CHILDS', 175, 110);
-      }, loadedFonts ? 6 : 2000);
+      writeText(2000);
   }
 
   function paintDistances() {
@@ -284,13 +251,97 @@ var DeciduousCoverArt = (function() {
             }
 
     		var idx = 4*(y*canvas.width + x);
-    		currImageData.data[idx+0] = color[0];
-    		currImageData.data[idx+1] = color[1];
-    		currImageData.data[idx+2] = color[2];
-    		currImageData.data[idx+3] = color[3];
+            if (color[3] === 255) {
+        		currImageData.data[idx+0] = color[0];
+        		currImageData.data[idx+1] = color[1];
+        		currImageData.data[idx+2] = color[2];
+        		currImageData.data[idx+3] = color[3];
+            } else {
+                var oldColor = [
+                    currImageData.data[idx+0],
+                    currImageData.data[idx+1],
+                    currImageData.data[idx+2],
+                    currImageData.data[idx+3]
+                ];
+                var newColor = getGradient(
+                    color, oldColor,
+                    color[3]/255
+                );
+                currImageData.data[idx+0] = newColor[0];
+        		currImageData.data[idx+1] = newColor[1];
+        		currImageData.data[idx+2] = newColor[2];
+        		currImageData.data[idx+3] = 255;
+            }
     	}
     }
     ctx.putImageData(currImageData, 0, 0);
+  }
+
+  function writeText(waitTime) {
+      setTimeout(function() {
+          loadedFonts = true;
+
+          //write text
+          ctx.font = '47px Anders';
+          ctx.fillStyle = 'black';
+          ctx.textBaseline = 'top';
+          ctx.fillText('D E C I D U O U S', 30, 147);
+      }, loadedFonts ? 0 : waitTime);
+
+      setTimeout(function() {
+          loadedFonts = true;
+
+          //write text
+          ctx.font = '27px ElegantLux';
+          ctx.fillStyle = 'black';
+          ctx.textBaseline = 'top';
+          ctx.fillText('ANDIE CHILDS', 175, 110);
+      }, loadedFonts ? 0 : waitTime);
+  }
+
+  function drawRhombusBackground() {
+      var ptr = [0, 0];
+      for (var oi = 0; oi < BG.order.length; oi++) {
+          if (BG.order[oi] === 0) {
+              var opcty = BG.maxOpacity*(
+                  BG.colorIntensities[BG.order[oi]][ptr[0]]+1
+              )/BG.numRects;
+              ctx.fillStyle = 'rgba('+
+                  BG.colorVals[BG.order[oi]][0]+','+
+                  BG.colorVals[BG.order[oi]][1]+','+
+                  BG.colorVals[BG.order[oi]][2]+','+
+                  opcty+
+              ')';
+              ctx.translate(BG.offset, 0);
+              ctx.rotate(BG.theta);
+              ctx.fillRect(
+                  ptr[0]*BG.rW,
+                  -ptr[0]*BG.rW*Math.tan(BG.theta),
+                  BG.rW, BG.rL
+              );
+              ctx.rotate(-BG.theta);
+              ctx.translate(-BG.offset, 0);
+              ptr[0]++;
+          } else {
+              var opcty = BG.maxOpacity*(
+                  BG.colorIntensities[BG.order[oi]][ptr[1]]+1
+              )/BG.numRects;
+              ctx.fillStyle = 'rgba('+
+                  BG.colorVals[BG.order[oi]][0]+','+
+                  BG.colorVals[BG.order[oi]][1]+','+
+                  BG.colorVals[BG.order[oi]][2]+','+
+                  opcty+
+              ')';
+              ctx.rotate(-BG.theta);
+              ctx.fillRect(
+                  ptr[1]*BG.rW,
+                  (ptr[1]+1)*BG.rW*Math.tan(BG.theta),
+                  BG.rW, BG.rL
+              );
+              ctx.rotate(BG.theta);
+              ptr[1]++;
+          }
+      }
   }
 
   /* getLeafColor(localCoords, globalCoords, coordSystem, dist, farthest)
@@ -300,14 +351,15 @@ var DeciduousCoverArt = (function() {
   function getLeafColor(
       localCoords, globalCoords, coordSystem, dist, farthest
   ) {
-      //rainbow gradient
       var frac = dist/farthest;
-      //localCoords[0] = Math.floor(localCoords[0]/6);
+
+      //color bands
+      //localCoords[0] = Math.round(10*localCoords[0])/10;
       var color1 = HSVtoRGB(
           numMap(
               (globalCoords[0]<mORIGIN[0]?1:-1)*localCoords[0],
               [-0.4375, 0.4375], [0,0.8]
-          ), 0.7, 1
+          ), 0.5, 0.92
       );
 
       //grayscale
@@ -316,32 +368,34 @@ var DeciduousCoverArt = (function() {
       color1 = getGradient(
           color1,
           grayColor,
-          numMap(getMag(globalCoords), [0.4, 1.414], [1, 1])
+          numMap(getMag(localCoords), [0, 0.4], [1, 0])
       );
 
-      //white highlights
-      color1 = getGradient(
-          color1,
-          [255, 255, 255],
-          (frac > DRAW_HELPERS.colorThresh - 0.01 ? numMap(
-              dist/farthest, [
-                  DRAW_HELPERS.colorThresh - 0.01, DRAW_HELPERS.colorThresh
-              ], [0.9, 0.1]
-          ) : 0.9)
-      );
-
-      if (localCoords[1] > 0) {
-          //black shadows
+      //highlight the top
+      if (frac > DRAW_HELPERS.colorThresh-0.007 && localCoords[1] < 0) {
+          return color1.concat([
+              numMap(
+                  frac, [
+                      DRAW_HELPERS.colorThresh - 0.007,
+                      DRAW_HELPERS.colorThresh
+                  ], [255, 50]
+              )
+          ]);
+      } else if (frac > DRAW_HELPERS.colorThresh-0.01 && localCoords[1] > 0) {
+          //bottom shadow
           return getGradient(
               color1,
               [0, 0, 0],
-              (frac > DRAW_HELPERS.colorThresh - 0.02 ? numMap(
+              numMap(
                   dist/farthest, [
-                      DRAW_HELPERS.colorThresh - 0.02, DRAW_HELPERS.colorThresh
+                      DRAW_HELPERS.colorThresh - 0.01,
+                      DRAW_HELPERS.colorThresh
                   ], [1, 0.85]
-              ) : 1)
+              )
           ).concat([255]);
-      } else return color1.concat([255]);
+      } else {
+          return color1.concat([255]);
+      }
   }
 
   /* getDistFunc(g)
@@ -649,6 +703,18 @@ var DeciduousCoverArt = (function() {
     return document.getElementById(id.substring(1));
   }
 
+  function getRandPerm(n, m) { //random permutation of integers in [0, n)
+      //take the m first elements
+      var ret = [];
+      for (var ai = 0; ai < n; ai++) {
+          var j = getRandInt(0, ai+1);
+          ret[ai] = ret[j];
+          ret[j] = ai;
+      }
+      if (arguments.length === 1) return ret;
+      else return ret.slice(n-m);
+  }
+
   function getRandInt(low, high) { //output is in [low, high)
     return Math.floor(low + Math.random()*(high-low));
   }
@@ -811,7 +877,8 @@ var DeciduousCoverArt = (function() {
     getCoordsIn: getCoordsIn,
     getPoints: function() {
         return points;
-    }
+    },
+    BG: BG
   };
 })();
 
