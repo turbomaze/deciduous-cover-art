@@ -2,9 +2,9 @@
 |     Deciduous    |
 |     Cover Art    |
 | @author Anthony  |
-| @version 0.3     |
+| @version 1.0     |
 | @date 2015/06/27 |
-| @edit 2015/06/30 |
+| @edit 2015/07/09 |
 \******************/
 
 var DeciduousCoverArt = (function() {
@@ -16,16 +16,42 @@ var DeciduousCoverArt = (function() {
       contourFunction: false,
       generatorPoints: false,
       boundingBox: false,
+      drawLeaves: false,
       booleanColors: true,
-      colorThresh: 0.19
+      colorThresh: 0.14
   };
 
-  var cDIMS = [350, 350]; //size in pixels
+  var cDIMS = [3*2560, 3*2560]; //size in pixels
   var mDIMS = [2, 2]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
     [1, -1]
   ]; //top left and bottom right corner in mathematical coords
+
+  var n = 6;
+  var BG = {
+      theta: -15*Math.PI/180,
+      maxOpacity: 0.28,
+      colorVals: [
+          [40,210,60],
+          [230,140,20]
+      ],
+      colorIntensities: [
+          getRandPerm(n, n),
+          getRandPerm(n, n)
+      ],
+      order: getRandPerm(2*n, 2*n).map(function(a) {
+          return a%2;
+      })
+  }; //the background
+  var which = 1;
+  if (which === 0) {
+      BG.colorIntensities = [[1,4,0,2,3,5],[1,4,0,3,5,2]];
+      BG.order = [1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0];
+  } else if (which === 1) {
+      BG.colorIntensities = [[1,3,2,5,4,0],[3,0,1,4,5,2]];
+      BG.order = [0,0,1,1,1,1,0,0,0,1,1,0];
+  }
 
   var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
@@ -46,10 +72,23 @@ var DeciduousCoverArt = (function() {
   }); //the canvas point that corresponds to the mathematical (0,0)
   var mORIGIN = [0, 0]; //mathematical origin
 
+  //some helper variables for the background
+  BG.numRects = BG.colorIntensities[0].length;
+  BG.rW = (
+      Math.abs(
+          Math.sin(BG.theta)*cDIMS[1]
+      )+Math.abs(Math.cos(BG.theta)*cDIMS[0])
+  )/BG.numRects;
+  BG.rL = Math.abs(
+      cDIMS[1]/Math.cos(BG.theta)
+  ) + Math.abs(BG.rW*Math.tan(BG.theta));
+  BG.offset = cDIMS[1]*Math.tan(BG.theta);
+
   /*********************
    * working variables */
   var canvas, ctx;
   var contFunc;
+  var loadedFonts = false;
 
   /******************
    * work functions */
@@ -58,6 +97,8 @@ var DeciduousCoverArt = (function() {
     canvas = $s('#canvas');
     canvas.width = cDIMS[0];
     canvas.height = cDIMS[1];
+    canvas.style.width = cDIMS[0]/15 + 'px';
+    canvas.style.height = cDIMS[1]/15 + 'px';
     ctx = canvas.getContext('2d');
 
     contFunc = getContourFunction([A, C]);
@@ -87,6 +128,9 @@ var DeciduousCoverArt = (function() {
         drawCoverArt();
     });
 
+    $s('#save-btn').addEventListener('click', promptSaveCanvas);
+    $s('#blob-btn').addEventListener('click', promptBlobSaveCanvas);
+
     //do the work
     drawCoverArt();
   }
@@ -95,10 +139,15 @@ var DeciduousCoverArt = (function() {
       //clean slate
       clearCanvas();
 
+      //draw the background
+      drawRhombusBackground();
+
       //draw the distance-based colors
-      var s = +new Date();
-      paintDistances();
-      console.log(((+new Date()) - s) + 'ms');
+      if (DRAW_HELPERS.drawLeaves) {
+          var s = +new Date();
+          paintDistances();
+          console.log(((+new Date()) - s) + 'ms');
+      }
 
       //draw the axes
       if (DRAW_HELPERS.axes) {
@@ -149,6 +198,9 @@ var DeciduousCoverArt = (function() {
               250, 'red'
           );
       }
+
+      //write text
+      writeText(2000);
   }
 
   function paintDistances() {
@@ -212,40 +264,152 @@ var DeciduousCoverArt = (function() {
             }
 
     		var idx = 4*(y*canvas.width + x);
-    		currImageData.data[idx+0] = color[0];
-    		currImageData.data[idx+1] = color[1];
-    		currImageData.data[idx+2] = color[2];
-    		currImageData.data[idx+3] = color[3];
+            if (color[3] === 255) {
+        		currImageData.data[idx+0] = color[0];
+        		currImageData.data[idx+1] = color[1];
+        		currImageData.data[idx+2] = color[2];
+        		currImageData.data[idx+3] = color[3];
+            } else {
+                var oldColor = [
+                    currImageData.data[idx+0],
+                    currImageData.data[idx+1],
+                    currImageData.data[idx+2],
+                    currImageData.data[idx+3]
+                ];
+                var newColor = getGradient(
+                    color, oldColor,
+                    color[3]/255
+                );
+                currImageData.data[idx+0] = newColor[0];
+        		currImageData.data[idx+1] = newColor[1];
+        		currImageData.data[idx+2] = newColor[2];
+        		currImageData.data[idx+3] = 255;
+            }
     	}
     }
     ctx.putImageData(currImageData, 0, 0);
   }
 
-  /* getLeafColor(localCoords, globalCoords)
-   * Given
+  function writeText(waitTime) {
+      var vOffset1 = 4320;
+      var vOffset2 = 690;
+      setTimeout(function() {
+          loadedFonts = true;
+
+          //write text
+          ctx.font = '480px ElegantLux';
+          ctx.fillStyle = '#36003B';
+          ctx.textBaseline = 'top';
+          ctx.fillText('ANDIE CHILDS', 2480, vOffset1);
+      }, loadedFonts ? 0 : waitTime);
+
+      setTimeout(function() {
+          loadedFonts = true;
+
+          //write text
+          ctx.font = '780px Anders';
+          ctx.fillStyle = '#36003B';
+          ctx.textBaseline = 'top';
+          ctx.fillText('D E C I D U O U S', 190, vOffset1+vOffset2);
+      }, loadedFonts ? 0 : waitTime);
+  }
+
+  function drawRhombusBackground() {
+      var ptr = [0, 0];
+      for (var oi = 0; oi < BG.order.length; oi++) {
+          if (BG.order[oi] === 0) {
+              var opcty = BG.maxOpacity*(
+                  BG.colorIntensities[BG.order[oi]][ptr[0]]+1
+              )/BG.numRects;
+              ctx.fillStyle = 'rgba('+
+                  BG.colorVals[BG.order[oi]][0]+','+
+                  BG.colorVals[BG.order[oi]][1]+','+
+                  BG.colorVals[BG.order[oi]][2]+','+
+                  opcty+
+              ')';
+              ctx.translate(BG.offset, 0);
+              ctx.rotate(BG.theta);
+              ctx.fillRect(
+                  ptr[0]*BG.rW,
+                  -ptr[0]*BG.rW*Math.tan(BG.theta),
+                  BG.rW, BG.rL
+              );
+              ctx.rotate(-BG.theta);
+              ctx.translate(-BG.offset, 0);
+              ptr[0]++;
+          } else {
+              var opcty = BG.maxOpacity*(
+                  BG.colorIntensities[BG.order[oi]][ptr[1]]+1
+              )/BG.numRects;
+              ctx.fillStyle = 'rgba('+
+                  BG.colorVals[BG.order[oi]][0]+','+
+                  BG.colorVals[BG.order[oi]][1]+','+
+                  BG.colorVals[BG.order[oi]][2]+','+
+                  opcty+
+              ')';
+              ctx.rotate(-BG.theta);
+              ctx.fillRect(
+                  ptr[1]*BG.rW,
+                  (ptr[1]+1)*BG.rW*Math.tan(BG.theta),
+                  BG.rW, BG.rL
+              );
+              ctx.rotate(BG.theta);
+              ptr[1]++;
+          }
+      }
+  }
+
+  /* getLeafColor(localCoords, globalCoords, coordSystem, dist, farthest)
+   * Given all the defining information about a point in mathematical space,
+   * this function returns its color.
    */
   function getLeafColor(
       localCoords, globalCoords, coordSystem, dist, farthest
   ) {
       var frac = dist/farthest;
+
+      //localCoords[0] = Math.round(10*localCoords[0])/10; //bands
       var color1 = HSVtoRGB(
           numMap(
               (globalCoords[0]<mORIGIN[0]?1:-1)*localCoords[0],
-              [-0.4375, 0.4375], [0,0.8]
-          ), 0.7, 1
+              [-0.4375, 0.4375], [0.1,0.5]
+          ), 0.8, 1.0
       );
+
+      //grayscale
+      var luminosity = 0.21*color1[0] + 0.72*color1[1] + 0.07*color1[2];
+      var grayColor = [luminosity, luminosity, luminosity];
       color1 = getGradient(
           color1,
-          [255, 255, 255],
-          (frac>0.18?numMap(dist/farthest, [0.18, 0.19], [0.9, 0.1]):0.9)
+          grayColor,
+          numMap(getMag(globalCoords), [0, 1.4], [1, 0])
       );
-      if (localCoords[1] > 0) {
+
+      //highlight the top
+      if (frac > DRAW_HELPERS.colorThresh-0.007 && localCoords[1] < 0) {
+          return color1.concat([
+              numMap(
+                  frac, [
+                      DRAW_HELPERS.colorThresh - 0.007,
+                      DRAW_HELPERS.colorThresh
+                  ], [255, 50]
+              )
+          ]);
+      } else if (frac > DRAW_HELPERS.colorThresh-0.01 && localCoords[1] > 0) {
+          //bottom shadow
           return getGradient(
               color1,
               [0, 0, 0],
-              (frac>0.17?numMap(dist/farthest, [0.17, 0.19], [1, 0.85]):1)
+              numMap(
+                  dist/farthest, [
+                      DRAW_HELPERS.colorThresh - 0.01,
+                      DRAW_HELPERS.colorThresh
+                  ], [1, 0.85]
+              )
           ).concat([255]);
-      } else return color1.concat([255]);
+      } else {
+          return color1.concat([255]);
+      }
   }
 
   /* getDistFunc(g)
@@ -383,6 +547,48 @@ var DeciduousCoverArt = (function() {
 
   /********************
    * helper functions */
+  function promptBlobSaveCanvas() {
+   	var imageInBase64 = canvas.toDataURL('image/png').substring("data:image/png;base64,".length);
+   	var blob = b64toBlob(imageInBase64, 'image/png');
+   	var blobUrl = URL.createObjectURL(blob);
+   	window.location = blobUrl;
+  }
+
+  /* http://stackoverflow.com/questions/16245767/
+            creating-a-blob-from-a-base64-string-in-javascript */
+  function b64toBlob(b64Data, contentType, sliceSize) {
+       contentType = contentType || '';
+       sliceSize = sliceSize || 512;
+
+       var byteCharacters = atob(b64Data);
+       var byteArrays = [];
+
+       for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+           var slice = byteCharacters.slice(offset, offset + sliceSize);
+
+           var byteNumbers = new Array(slice.length);
+           for (var i = 0; i < slice.length; i++) {
+               byteNumbers[i] = slice.charCodeAt(i);
+           }
+
+           var byteArray = new Uint8Array(byteNumbers);
+
+           byteArrays.push(byteArray);
+       }
+
+       var blob = new Blob(byteArrays, {type: contentType});
+       return blob;
+   }
+
+  function promptSaveCanvas() {
+      var downloadUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
+      if (downloadUrl.length < 1024*1024 || confirm(
+          'This is a relatively large image, so your browser may crash. Continue?'
+      )) {
+          window.location = downloadUrl;
+      }
+  }
+
   function getJuliaColorFromCoord(realConst, imConst, initX, initY) {
     var colorMult = 2;
     var maxIterations = 400;
@@ -437,9 +643,12 @@ var DeciduousCoverArt = (function() {
   function getGradient(c1, c2, percent) {
   	var ret = [0, 0, 0];
 
-  	ret[0] = Math.floor((percent * c1[0]) + ((1 - percent) * c2[0]))%256;
-  	ret[1] = Math.floor((percent * c1[1]) + ((1 - percent) * c2[1]))%256;
-  	ret[2] = Math.floor((percent * c1[2]) + ((1 - percent) * c2[2]))%256;
+    for (var ai = 0; ai < 3; ai++) {
+  	  ret[ai] = Math.floor(Math.sqrt(
+          percent*c1[ai]*c1[ai] +
+          (1 - percent)*c2[ai]*c2[ai]
+      ))%256;
+    }
 
   	return ret;
   }
@@ -542,6 +751,18 @@ var DeciduousCoverArt = (function() {
   function $s(id) { //for convenience
     if (id.charAt(0) !== '#') return false;
     return document.getElementById(id.substring(1));
+  }
+
+  function getRandPerm(n, m) { //random permutation of integers in [0, n)
+      //take the m first elements
+      var ret = [];
+      for (var ai = 0; ai < n; ai++) {
+          var j = getRandInt(0, ai+1);
+          ret[ai] = ret[j];
+          ret[j] = ai;
+      }
+      if (arguments.length === 1) return ret;
+      else return ret.slice(n-m);
   }
 
   function getRandInt(low, high) { //output is in [low, high)
@@ -706,7 +927,8 @@ var DeciduousCoverArt = (function() {
     getCoordsIn: getCoordsIn,
     getPoints: function() {
         return points;
-    }
+    },
+    BG: BG
   };
 })();
 
