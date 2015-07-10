@@ -16,11 +16,12 @@ var DeciduousCoverArt = (function() {
       contourFunction: false,
       generatorPoints: false,
       boundingBox: false,
+      drawLeaves: false,
       booleanColors: true,
       colorThresh: 0.14
   };
 
-  var cDIMS = [500, 500]; //size in pixels
+  var cDIMS = [3*2560, 3*2560]; //size in pixels
   var mDIMS = [2, 2]; //size in mathematical units
   var mBOUND_BOX = [
     [-1, 1],
@@ -30,7 +31,7 @@ var DeciduousCoverArt = (function() {
   var n = 6;
   var BG = {
       theta: -15*Math.PI/180,
-      maxOpacity: 0.2,
+      maxOpacity: 0.28,
       colorVals: [
           [40,210,60],
           [230,140,20]
@@ -43,6 +44,14 @@ var DeciduousCoverArt = (function() {
           return a%2;
       })
   }; //the background
+  var which = 1;
+  if (which === 0) {
+      BG.colorIntensities = [[1,4,0,2,3,5],[1,4,0,3,5,2]];
+      BG.order = [1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0];
+  } else if (which === 1) {
+      BG.colorIntensities = [[1,3,2,5,4,0],[3,0,1,4,5,2]];
+      BG.order = [0,0,1,1,1,1,0,0,0,1,1,0];
+  }
 
   var A = 0.4, C = -0.3; //parameters of the contour function
   var points = [
@@ -55,7 +64,6 @@ var DeciduousCoverArt = (function() {
     [0, -1.03],
     [0.65, -1.10], [-0.65, -1.10]
   ]; //these points spawn leaves
-  points = [[-2,0],[2,0]];
 
   /*************
    * constants */
@@ -89,6 +97,8 @@ var DeciduousCoverArt = (function() {
     canvas = $s('#canvas');
     canvas.width = cDIMS[0];
     canvas.height = cDIMS[1];
+    canvas.style.width = cDIMS[0]/15 + 'px';
+    canvas.style.height = cDIMS[1]/15 + 'px';
     ctx = canvas.getContext('2d');
 
     contFunc = getContourFunction([A, C]);
@@ -119,6 +129,7 @@ var DeciduousCoverArt = (function() {
     });
 
     $s('#save-btn').addEventListener('click', promptSaveCanvas);
+    $s('#blob-btn').addEventListener('click', promptBlobSaveCanvas);
 
     //do the work
     drawCoverArt();
@@ -132,9 +143,11 @@ var DeciduousCoverArt = (function() {
       drawRhombusBackground();
 
       //draw the distance-based colors
-      var s = +new Date();
-      paintDistances();
-      console.log(((+new Date()) - s) + 'ms');
+      if (DRAW_HELPERS.drawLeaves) {
+          var s = +new Date();
+          paintDistances();
+          console.log(((+new Date()) - s) + 'ms');
+      }
 
       //draw the axes
       if (DRAW_HELPERS.axes) {
@@ -278,24 +291,26 @@ var DeciduousCoverArt = (function() {
   }
 
   function writeText(waitTime) {
+      var vOffset1 = 4320;
+      var vOffset2 = 690;
       setTimeout(function() {
           loadedFonts = true;
 
           //write text
-          ctx.font = '47px Anders';
-          ctx.fillStyle = 'black';
+          ctx.font = '480px ElegantLux';
+          ctx.fillStyle = '#36003B';
           ctx.textBaseline = 'top';
-          ctx.fillText('D E C I D U O U S', 30, 147);
+          ctx.fillText('ANDIE CHILDS', 2480, vOffset1);
       }, loadedFonts ? 0 : waitTime);
 
       setTimeout(function() {
           loadedFonts = true;
 
           //write text
-          ctx.font = '27px ElegantLux';
-          ctx.fillStyle = 'black';
+          ctx.font = '780px Anders';
+          ctx.fillStyle = '#36003B';
           ctx.textBaseline = 'top';
-          ctx.fillText('ANDIE CHILDS', 175, 110);
+          ctx.fillText('D E C I D U O U S', 190, vOffset1+vOffset2);
       }, loadedFonts ? 0 : waitTime);
   }
 
@@ -353,13 +368,12 @@ var DeciduousCoverArt = (function() {
   ) {
       var frac = dist/farthest;
 
-      //color bands
-      //localCoords[0] = Math.round(10*localCoords[0])/10;
+      //localCoords[0] = Math.round(10*localCoords[0])/10; //bands
       var color1 = HSVtoRGB(
           numMap(
               (globalCoords[0]<mORIGIN[0]?1:-1)*localCoords[0],
-              [-0.4375, 0.4375], [0,0.8]
-          ), 0.5, 0.92
+              [-0.4375, 0.4375], [0.1,0.5]
+          ), 0.8, 1.0
       );
 
       //grayscale
@@ -368,7 +382,7 @@ var DeciduousCoverArt = (function() {
       color1 = getGradient(
           color1,
           grayColor,
-          numMap(getMag(localCoords), [0, 0.4], [1, 0])
+          numMap(getMag(globalCoords), [0, 1.4], [1, 0])
       );
 
       //highlight the top
@@ -533,6 +547,39 @@ var DeciduousCoverArt = (function() {
 
   /********************
    * helper functions */
+  function promptBlobSaveCanvas() {
+   	var imageInBase64 = canvas.toDataURL('image/png').substring("data:image/png;base64,".length);
+   	var blob = b64toBlob(imageInBase64, 'image/png');
+   	var blobUrl = URL.createObjectURL(blob);
+   	window.location = blobUrl;
+  }
+
+  /* http://stackoverflow.com/questions/16245767/
+            creating-a-blob-from-a-base64-string-in-javascript */
+  function b64toBlob(b64Data, contentType, sliceSize) {
+       contentType = contentType || '';
+       sliceSize = sliceSize || 512;
+
+       var byteCharacters = atob(b64Data);
+       var byteArrays = [];
+
+       for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+           var slice = byteCharacters.slice(offset, offset + sliceSize);
+
+           var byteNumbers = new Array(slice.length);
+           for (var i = 0; i < slice.length; i++) {
+               byteNumbers[i] = slice.charCodeAt(i);
+           }
+
+           var byteArray = new Uint8Array(byteNumbers);
+
+           byteArrays.push(byteArray);
+       }
+
+       var blob = new Blob(byteArrays, {type: contentType});
+       return blob;
+   }
+
   function promptSaveCanvas() {
       var downloadUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
       if (downloadUrl.length < 1024*1024 || confirm(
@@ -596,9 +643,12 @@ var DeciduousCoverArt = (function() {
   function getGradient(c1, c2, percent) {
   	var ret = [0, 0, 0];
 
-  	ret[0] = Math.floor((percent * c1[0]) + ((1 - percent) * c2[0]))%256;
-  	ret[1] = Math.floor((percent * c1[1]) + ((1 - percent) * c2[1]))%256;
-  	ret[2] = Math.floor((percent * c1[2]) + ((1 - percent) * c2[2]))%256;
+    for (var ai = 0; ai < 3; ai++) {
+  	  ret[ai] = Math.floor(Math.sqrt(
+          percent*c1[ai]*c1[ai] +
+          (1 - percent)*c2[ai]*c2[ai]
+      ))%256;
+    }
 
   	return ret;
   }
